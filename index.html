@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Three.js Character Animation Controller</title>
+    <style>
+        body { 
+            margin: 0; 
+            font-family: Arial, sans-serif; 
+            overflow: hidden;
+        }
+        canvas { 
+            display: block; 
+        }
+        #fullscreen-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.5);
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 16px ;
+            cursor: pointer;
+            z-index: 10;
+        }
+        #fullscreen-btn:hover {
+            background: rgba(0, 0, 0, 0.7);
+        }
+        #controller {
+            position: absolute;
+            bottom: 10%;
+            left: 10%;
+            transform: translateX(-50%);
+            display: grid;
+            grid-template-areas:
+                ". up ."
+                "left center right"
+                ". down .";
+            gap: 10px;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 5px;
+            border-radius: 5px;
+            display: none; /* مخفي في البداية */
+        }
+        .control-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 3px;
+            border: 3px solid #007bff;
+            background-color: rgba(0, 123, 255, 0.3);
+            color: white;
+            font-size: 50px;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-transform: uppercase;
+            font-weight: bold;
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+        }
+        .control-btn:hover {
+            background-color: rgba(0, 123, 255, 0.5);
+        }
+        .control-btn:active {
+            background-color: rgba(0, 0, 0, 0.8);
+            transform: scale(0.95);
+        }
+        #walkingBtn { grid-area: up; }
+        #leftBtn { grid-area: left; }
+        #jumpingBtn { grid-area: center; }
+        #rightBtn { grid-area: right; }
+        #backwardsBtn { grid-area: down; }
+        
+        #kneelingBtn {
+            position: absolute;
+            right: 10%;
+            bottom: 10%;
+            display: none; /* مخفي في البداية */
+        }
+
+        @media (max-width: 768px) {
+            .control-btn {
+                width: 30px;
+                height: 30px;
+                font-size: 8px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .control-btn {
+                width: 50px;
+                height: 50px;
+                font-size: 10px;
+            }
+            #controller {
+                gap: 5px;
+                padding: 10px;
+            }
+        }
+
+        /* أسلوب حالة التحميل */
+        #loadingOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 20;
+            transition: opacity 0.5s ease;
+        }
+        #loadingStatus {
+            color: #fff;
+            font-size: 18px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <button id="fullscreen-btn">💢</button>
+
+    <div id="loadingOverlay">
+        <div id="loadingStatus">Loading... (0/7)</div>
+    </div>
+
+    <div id="controller">
+        <button id="walkingBtn" class="control-btn"></button>
+        <button id="leftBtn" class="control-btn"></button>
+        <button id="jumpingBtn" class="control-btn"></button>
+        <button id="rightBtn" class="control-btn"></button>
+        <button id="backwardsBtn" class="control-btn"></button>
+    </div>
+    <button id="kneelingBtn" class="control-btn"></button>
+
+    <script async src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"></script>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.module.min.js",
+            "three/examples/jsm/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+            "./Player.js": "./Player.js",
+            "./map.js": "./map.js"
+        }
+    }
+    </script>
+    
+    <script type="module">
+        import * as THREE from 'three';
+        import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+        import Player from './Player.js';
+        import { loadMap1 } from './map.js';
+        
+        let scene, renderer, player, playerGroup, camera;
+
+        function initScene() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.body.appendChild(renderer.domElement);
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 10);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 8);
+            dirLight.position.set(0, 100, 0);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 2048;
+            dirLight.shadow.mapSize.height = 2048;
+            scene.add(dirLight);
+
+            loadMap1(scene);
+
+            playerGroup = new THREE.Group();
+            scene.add(playerGroup);
+
+            player = new Player(playerGroup);
+            camera = player.thirdPersonCamera;
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            player.update();
+            renderer.render(scene, camera);
+        }
+
+        function onWindowResize() {
+            player.onWindowResize();
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        const fullscreenBtn = document.getElementById('fullscreen-btn');
+        fullscreenBtn.addEventListener('click', () => {
+            if (!document.fullscreenElement) {
+                if (document.documentElement.requestFullscreen) {
+                    document.documentElement.requestFullscreen();
+                } else if (document.documentElement.mozRequestFullScreen) {
+                    document.documentElement.mozRequestFullScreen();
+                } else if (document.documentElement.webkitRequestFullscreen) {
+                    document.documentElement.webkitRequestFullscreen();
+                } else if (document.documentElement.msRequestFullscreen) {
+                    document.documentElement.msRequestFullscreen();
+                }
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.mozCancelFullScreen) {
+                    document.mozCancelFullScreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                } else if (document.msExitFullscreen) {
+                    document.msExitFullscreen();
+                }
+            }
+        });
+
+        initScene();
+        animate();
+        window.addEventListener('resize', onWindowResize, false);
+
+        // تحديث حالة التحميل وإظهار العناصر عند اكتمال التحميل
+        function updateLoadingStatus(animationsLoaded, totalAnimations) {
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            const loadingStatus = document.getElementById('loadingStatus');
+            const controller = document.getElementById('controller');
+            const kneelingBtn = document.getElementById('kneelingBtn');
+
+            loadingStatus.innerText = `Loading... (${animationsLoaded}/${totalAnimations})`;
+            if (animationsLoaded === totalAnimations) {
+                loadingOverlay.style.opacity = '0';
+                setTimeout(() => {
+                    loadingOverlay.style.display = 'none';
+                    controller.style.display = 'grid';
+                    kneelingBtn.style.display = 'block';
+                }, 500);
+            }
+        }
+
+        // استدعاء التحديث في بداية التحميل
+        updateLoadingStatus(0, 7);
+    </script>
+</body>
+</html>
